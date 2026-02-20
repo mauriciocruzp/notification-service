@@ -1,7 +1,7 @@
 {
   "name": "notification-service",
   "version": "0.0.1",
-  "description": "",
+  "description": "Microservicio de notificaciones - consume Kafka (AWS MSK), REST + WebSocket",
   "author": "",
   "private": true,
   "license": "UNLICENSED",
@@ -17,14 +17,37 @@
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
-    "test:e2e": "jest --config ./test/jest-e2e.json"
+    "test:e2e": "jest --config ./test/jest-e2e.json",
+    "migration:generate": "ts-node -r tsconfig-paths/register ./node_modules/typeorm/cli.js migration:generate -d src/database/data-source.ts",
+    "migration:create": "ts-node -r tsconfig-paths/register ./node_modules/typeorm/cli.js migration:create",
+    "migration:run": "npm run build && node -r dotenv/config ./node_modules/typeorm/cli.js migration:run -d dist/database/data-source.js",
+    "migration:revert": "npm run build && node -r dotenv/config ./node_modules/typeorm/cli.js migration:revert -d dist/database/data-source.js",
+    "migration:show": "npm run build && node -r dotenv/config ./node_modules/typeorm/cli.js migration:show -d dist/database/data-source.js"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",
+    "@nestjs/config": "^4.0.0",
     "@nestjs/core": "^11.0.1",
+    "@nestjs/jwt": "^11.0.0",
+    "@nestjs/passport": "^11.0.0",
     "@nestjs/platform-express": "^11.0.1",
+    "@nestjs/platform-socket.io": "^11.0.1",
+    "@nestjs/typeorm": "^11.0.0",
+    "@nestjs/websockets": "^11.0.1",
+    "@nestjs/swagger": "^11.0.0",
+    "@nestjs/throttler": "^6.0.0",
+    "class-transformer": "^0.5.1",
+    "class-validator": "^0.14.1",
+    "aws-msk-iam-sasl-signer-js": "^1.0.0",
+    "kafkajs": "^2.2.4",
+    "passport": "^0.7.0",
+    "passport-jwt": "^4.0.1",
+    "pg": "^8.13.0",
     "reflect-metadata": "^0.2.2",
-    "rxjs": "^7.8.1"
+    "rxjs": "^7.8.1",
+    "socket.io": "^4.8.0",
+    "typeorm": "^0.3.20",
+    "dotenv": "^16.4.5"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.2.0",
@@ -35,6 +58,7 @@
     "@types/express": "^5.0.0",
     "@types/jest": "^30.0.0",
     "@types/node": "^22.10.7",
+    "@types/passport-jwt": "^4.0.1",
     "@types/supertest": "^6.0.2",
     "eslint": "^9.18.0",
     "eslint-config-prettier": "^10.0.1",
@@ -52,19 +76,13 @@
     "typescript-eslint": "^8.20.0"
   },
   "jest": {
-    "moduleFileExtensions": [
-      "js",
-      "json",
-      "ts"
-    ],
+    "moduleFileExtensions": ["js", "json", "ts"],
     "rootDir": "src",
     "testRegex": ".*\\.spec\\.ts$",
     "transform": {
       "^.+\\.(t|j)s$": "ts-jest"
     },
-    "collectCoverageFrom": [
-      "**/*.(t|j)s"
-    ],
+    "collectCoverageFrom": ["**/*.(t|j)s"],
     "coverageDirectory": "../coverage",
     "testEnvironment": "node"
   }
