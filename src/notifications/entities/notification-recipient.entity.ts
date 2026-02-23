@@ -7,24 +7,23 @@ import {
   PrimaryGeneratedColumn,
   UpdateDateColumn,
   Unique,
+  JoinColumn,
 } from 'typeorm';
 import { Notification } from './notification.entity';
 
 @Entity('notification_recipients')
-@Unique(['notificationId', 'recipient'])
-@Index(['notificationId'])
+@Unique(['notification', 'recipient'])
+@Index(['notification'])
 @Index(['recipient', 'createdAt'])
 @Index(['recipient', 'readAt'])
 export class NotificationRecipient {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ name: 'notification_id', type: 'uuid' })
-  notificationId: string;
-
   @ManyToOne(() => Notification, (notification) => notification.recipients, {
     onDelete: 'CASCADE',
   })
+  @JoinColumn({ name: 'notification_id' })
   notification: Notification;
 
   @Column({ type: 'varchar', length: 255 })

@@ -98,7 +98,7 @@ export class NotificationsService {
 
   async findOne(notificationId: string, recipient: string): Promise<NotificationWithRecipient> {
     const recipientEntity = await this.recipientRepo.findOne({
-      where: { notificationId, recipient },
+      where: { notification: { id: notificationId }, recipient },
       relations: ['notification'],
     });
 
@@ -134,7 +134,7 @@ export class NotificationsService {
 
   async markAsRead(notificationId: string, recipient: string): Promise<NotificationWithRecipient> {
     const recipientEntity = await this.recipientRepo.findOne({
-      where: { notificationId, recipient },
+      where: { notification: { id: notificationId }, recipient },
       relations: ['notification'],
     });
 
@@ -201,7 +201,7 @@ export class NotificationsService {
 
       const recipientEntities = recipients.map((recipient) =>
         manager.create(NotificationRecipient, {
-          notificationId: savedNotification.id,
+          notification: savedNotification,
           recipient,
         }),
       );

@@ -17,7 +17,7 @@
  *
  * Notas:
  * - channelType: "IN_APP" o "EMAIL"
- * - recipients: array de IDs numéricos (como números) si channelType es "IN_APP", o emails (como strings) si es "EMAIL"
+ * - recipients: array de IDs numéricos/emails, o strings cifrados como JWE compacto (se desencripta en el consumer)
  */
 export interface DomainEventPayload {
   auditId?: number;

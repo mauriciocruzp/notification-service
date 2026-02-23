@@ -24,6 +24,8 @@ export default () => ({
               password: process.env.KAFKA_SASL_PASSWORD,
             }
           : undefined,
+    recipientJweKeyB64Url: process.env.KAFKA_RECIPIENT_JWE_KEY_B64URL,
+    recipientJwePrivateKeyPem: process.env.KAFKA_RECIPIENT_JWE_PRIVATE_KEY_PEM,
   },
   jwt: {
     secret: process.env.JWT_SECRET ?? 'change-me-in-production',

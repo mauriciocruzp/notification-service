@@ -8,6 +8,7 @@ import {
   buildNotificationTitle,
   DomainEvent,
 } from './kafka-domain.event';
+import { decryptRecipient } from './recipient-jwe';
 import { NotificationDeliveryService } from '../websocket/notification-delivery.service';
 
 @Injectable()
@@ -39,6 +40,14 @@ export class KafkaConsumerService implements OnModuleInit, OnModuleDestroy {
     if (!brokers?.length) {
       this.logger.warn('KAFKA_BROKERS not set; Kafka consumer disabled');
       return;
+    }
+
+    const keyB64 = this.config.get<string | undefined>('kafka.recipientJweKeyB64Url');
+    const keyPem = this.config.get<string | undefined>('kafka.recipientJwePrivateKeyPem');
+    if (!keyB64?.trim() && !keyPem?.trim()) {
+      throw new Error(
+        'Recipient JWE key required when using Kafka. Set KAFKA_RECIPIENT_JWE_KEY_B64URL or KAFKA_RECIPIENT_JWE_PRIVATE_KEY_PEM',
+      );
     }
 
     // Construir configuración SASL según el mecanismo
@@ -154,7 +163,25 @@ export class KafkaConsumerService implements OnModuleInit, OnModuleDestroy {
     const title = buildNotificationTitle(event.eventType, event.payload.summary);
     const occurredAt = new Date(event.occurredAt);
 
-    const recipients = event.recipients.map((r) => String(r));
+    const jweConfig = {
+      keyB64Url: this.config.get<string | undefined>('kafka.recipientJweKeyB64Url'),
+      privateKeyPem: this.config.get<string | undefined>('kafka.recipientJwePrivateKeyPem'),
+    };
+
+    const recipientsRaw = event.recipients.map((r) => String(r));
+    const recipients: string[] = [];
+    for (const jwe of recipientsRaw) {
+      try {
+        const plain = await decryptRecipient(jwe, jweConfig);
+        if (plain.trim().length > 0) recipients.push(plain.trim());
+      } catch (err: any) {
+        this.logger.warn(`Failed to decrypt recipient JWE, skipping. ${err?.message ?? err}`);
+      }
+    }
+    if (!recipients.length) {
+      this.logger.warn(`No valid recipients after decryption for event ${event.eventType}, skipping`);
+      return;
+    }
 
     const { notification, recipients: savedRecipients } =
       await this.notificationsService.createNotificationWithRecipients(

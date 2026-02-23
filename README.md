@@ -38,6 +38,11 @@ Copiar `.env.example` a `.env` y ajustar:
 
 Si `KAFKA_BROKERS` no está definido, el consumer no se inicia (útil para desarrollo sin Kafka).
 
+**Inicio de sesión AWS (IAM)** para MSK: el consumer usa solo IAM. Opciones:
+- **Variables de entorno**: `AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` (y opcionalmente `AWS_SESSION_TOKEN`).
+- **Perfil**: `AWS_PROFILE=nombre-perfil` (credenciales en `~/.aws/credentials`, p. ej. tras `aws configure`).
+- **En EC2/ECS/Lambda**: no hace falta configurar nada; se usa el rol IAM de la instancia o tarea.
+
 ## Kafka local (Docker Compose)
 
 Para levantar Apache Kafka en el mismo proyecto (desarrollo local):
