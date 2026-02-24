@@ -1,34 +1,13 @@
-# Docker Compose para desarrollo local: Apache Kafka (Confluent Platform)
+# Docker Compose para desarrollo local: broker MQTT (Eclipse Mosquitto)
 # Uso: docker compose up -d
-# Kafka estará disponible en localhost:9092 (bridge del puerto 9092)
+# MQTT disponible en localhost:1883 (TCP)
 
 services:
-  zookeeper:
-    image: confluentinc/cp-zookeeper:7.5.0
-    container_name: notification-service-zookeeper
-    environment:
-      ZOOKEEPER_CLIENT_PORT: 2181
-      ZOOKEEPER_TICK_TIME: 2000
-    volumes:
-      - zookeeper_data:/var/lib/zookeeper/data
-
-  kafka:
-    image: confluentinc/cp-kafka:7.5.0
-    container_name: notification-service-kafka
+  mosquitto:
+    image: eclipse-mosquitto:2
+    container_name: notification-service-mosquitto
     ports:
-      - "9092:9092"
-    environment:
-      KAFKA_BROKER_ID: 1
-      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
-    depends_on:
-      - zookeeper
+      - "1883:1883"
     volumes:
-      - kafka_data:/var/lib/kafka/data
-
-volumes:
-  zookeeper_data:
-  kafka_data:
+      - ./docker/mosquitto.conf:/mosquitto/config/mosquitto.conf
+    command: mosquitto -c /mosquitto/config/mosquitto.conf

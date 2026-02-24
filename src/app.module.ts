@@ -6,7 +6,7 @@ import { APP_GUARD } from '@nestjs/core';
 import configuration from './config/configuration';
 import { AuthModule } from './auth/auth.module';
 import { NotificationsModule } from './notifications/notifications.module';
-import { KafkaModule } from './kafka/kafka.module';
+import { MqttModule } from './mqtt/mqtt.module';
 import { WebsocketModule } from './websocket/websocket.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -63,7 +63,7 @@ import { AppService } from './app.service';
     AuthModule,
     NotificationsModule,
     WebsocketModule,
-    KafkaModule,
+    MqttModule,
     // AppController/Service kept for health or root
   ],
   controllers: [AppController],

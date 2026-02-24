@@ -1,13 +1,13 @@
 /**
- * Contrato de eventos Kafka acordado con Spring (SQYD-BackEnd).
- * Topic: sqyd.domain.events (o sqyd.audit.events por dominio)
+ * Contrato de eventos de dominio (Spring → MQTT topic).
+ * Topic: sqyd/domain/events (o el configurado en MQTT_TOPIC).
  *
  * Ejemplo de mensaje:
  * {
  *   "eventType": "AUDIT_CREATED",
  *   "channelType": "IN_APP",
  *   "occurredAt": "2025-02-17T12:00:00Z",
- *   "recipients": [789, 101],
+ *   "recipients": ["<JWE>", "<JWE>"],
  *   "payload": {
  *     "auditId": 123,
  *     "officeNumber": "OF-2025-001",
@@ -15,9 +15,8 @@
  *   }
  * }
  *
- * Notas:
  * - channelType: "IN_APP" o "EMAIL"
- * - recipients: array de IDs numéricos/emails, o strings cifrados como JWE compacto (se desencripta en el consumer)
+ * - recipients: array de strings JWE compacto (siempre cifrados)
  */
 export interface DomainEventPayload {
   auditId?: number;
@@ -37,7 +36,13 @@ export interface DomainEvent {
 export function parseDomainEvent(raw: string): DomainEvent | null {
   try {
     const parsed = JSON.parse(raw) as DomainEvent;
-    if (!parsed.eventType || !parsed.channelType || !parsed.recipients || !Array.isArray(parsed.recipients) || !parsed.payload) {
+    if (
+      !parsed.eventType ||
+      !parsed.channelType ||
+      !parsed.recipients ||
+      !Array.isArray(parsed.recipients) ||
+      !parsed.payload
+    ) {
       return null;
     }
     return parsed;

@@ -24,7 +24,7 @@ async function bootstrap() {
 
   const swagger = new DocumentBuilder()
     .setTitle('Notification Service')
-    .setDescription('REST API para notificaciones in-app (Kafka + WebSocket)')
+    .setDescription('REST API para notificaciones in-app (MQTT + WebSocket)')
     .setVersion('1.0')
     .addBearerAuth()
     .build();

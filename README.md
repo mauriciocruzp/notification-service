@@ -1,25 +1,25 @@
-# Notification Service (NestJS + AWS MSK)
+# Notification Service (NestJS + MQTT)
 
-Microservicio de notificaciones que consume eventos desde el backend Spring vía **AWS MSK (Kafka)** y entrega notificaciones in-app al frontend React mediante **REST** y **WebSocket**.
+Microservicio de notificaciones que consume eventos desde el backend Spring vía **MQTT** (local con Mosquitto o **Amazon MQ**) y entrega notificaciones in-app al frontend React mediante **REST** y **WebSocket**.
 
 ## Arquitectura
 
 ```
-[React] ←→ REST + WebSocket ←→ [NestJS Notifications] ← consume ← [AWS MSK]
+[React] ←→ REST + WebSocket ←→ [NestJS Notifications] ← consume ← [MQTT broker]
                                       ↓
                               [PostgreSQL]
-[Spring Boot] → produce eventos → [AWS MSK]
+[Spring Boot] → publica eventos → [MQTT broker]
 ```
 
-- **Spring Boot**: publica eventos de dominio (ej. auditoría creada/actualizada) en un topic Kafka con `channelType` y `recipients`.
-- **NestJS**: consume el topic, crea una notificación compartida y N filas en `notification_recipients` (una por cada recipient), y emite en tiempo real por WebSocket solo para `channelType: "IN_APP"`.
-- **React**: usa REST para listar/marcar leídas (filtrando por `recipient` del JWT) y WebSocket para recibir `new_notification`.
+- **Spring Boot**: publica eventos de dominio en un topic MQTT (ej. `sqyd/domain/events`) con `channelType` y `recipients` (JWE).
+- **NestJS**: se suscribe al topic, desencripta recipients, crea una notificación y N filas en `notification_recipients`, y emite por WebSocket para `channelType: "IN_APP"`.
+- **React**: REST para listar/marcar leídas y WebSocket para `new_notification`.
 
 ## Requisitos
 
 - Node.js 18+
 - PostgreSQL
-- Kafka (local o AWS MSK)
+- Broker MQTT (local: Mosquitto | producción: Amazon MQ)
 
 ## Variables de entorno
 
@@ -29,34 +29,57 @@ Copiar `.env.example` a `.env` y ajustar:
 |----------|-------------|
 | `PORT` | Puerto HTTP (default: 3000) |
 | `DATABASE_URL` | URL de conexión PostgreSQL |
-| `KAFKA_BROKERS` | Brokers Kafka separados por coma (ej. `localhost:9092` o `b-1.xxx.kafka.amazonaws.com:9092`) |
-| `KAFKA_GROUP_ID` | Consumer group (default: `notification-service`) |
-| `KAFKA_TOPIC` | Topic a consumir (default: `sqyd.domain.events`) |
+| `MQTT_BROKER_URL` | URL del broker (local: `mqtt://localhost:1883` \| Amazon MQ: `mqtts://b-xxx.mq.region.amazonaws.com:8883` o `wss://...:61619`) |
+| `MQTT_TOPIC` | Topic a suscribirse (default: `sqyd/domain/events`) |
+| `MQTT_CLIENT_ID` | ClientId único (default: `notification-service`) |
+| `MQTT_USERNAME` / `MQTT_PASSWORD` | Usuario/contraseña para Amazon MQ (opcional en local) |
+| `MQTT_RECIPIENT_JWE_KEY_B64URL` o `MQTT_RECIPIENT_JWE_PRIVATE_KEY_PEM` | Clave para desencriptar recipients (obligatorio si MQTT está activo) |
 | `JWT_SECRET` | Misma clave que Spring Boot para validar JWT |
-| `FRONTEND_ORIGIN` | Origen(es) permitidos en CORS (separados por coma) |
-| `THROTTLE_TTL` / `THROTTLE_LIMIT` | Rate limiting (segundos y peticiones por ventana) |
+| `FRONTEND_ORIGIN` | Origen(es) permitidos en CORS |
+| `THROTTLE_TTL` / `THROTTLE_LIMIT` | Rate limiting |
 
-Si `KAFKA_BROKERS` no está definido, el consumer no se inicia (útil para desarrollo sin Kafka).
+Si `MQTT_BROKER_URL` no está definido, el consumer MQTT no se inicia.
 
-**Inicio de sesión AWS (IAM)** para MSK: el consumer usa solo IAM. Opciones:
-- **Variables de entorno**: `AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` (y opcionalmente `AWS_SESSION_TOKEN`).
-- **Perfil**: `AWS_PROFILE=nombre-perfil` (credenciales en `~/.aws/credentials`, p. ej. tras `aws configure`).
-- **En EC2/ECS/Lambda**: no hace falta configurar nada; se usa el rol IAM de la instancia o tarea.
+**Amazon MQ**: usar TLS (`mqtts://` puerto 8883 o `wss://` puerto 61619) y configurar `MQTT_USERNAME` y `MQTT_PASSWORD` con el usuario del broker.
 
-## Kafka local (Docker Compose)
+### Estructura de las claves JWE (recipients)
 
-Para levantar Apache Kafka en el mismo proyecto (desarrollo local):
+Configura **una** de las dos; la misma clave (o par) debe usarse en Spring para cifrar los `recipients` y aquí para descifrarlos.
+
+| Variable | Estructura | Uso |
+|----------|------------|-----|
+| **`MQTT_RECIPIENT_JWE_KEY_B64URL`** | Clave simétrica en **Base64url** (sin `+`, `/` ni `=`). Para A256GCM: **32 bytes** (256 bits). | Spring cifra con clave compartida; este servicio decodifica y usa con `jose` para `compactDecrypt`. |
+| **`MQTT_RECIPIENT_JWE_PRIVATE_KEY_PEM`** | Clave privada en **PEM** (PKCS#8): `-----BEGIN PRIVATE KEY-----` … `-----END PRIVATE KEY-----`. RSA o EC. | Spring cifra con la pública; aquí se usa la privada para descifrar. |
+
+**Ejemplos**
+
+- **Clave simétrica (Base64url)**  
+  Generar: `openssl rand -base64 32 | tr '+/' '-_' | tr -d '='`  
+  Ejemplo (solo desarrollo): `K7gNU3sdo-OL0wNh8oWhWhTUF0uZyOOQvStFzMcLry0`
+
+- **Clave privada (PEM)**  
+  Ejemplo de formato (en `.env` puedes usar `\n` para saltos de línea):
+  ```
+  -----BEGIN PRIVATE KEY-----
+  MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQC...
+  -----END PRIVATE KEY-----
+  ```
+  En una línea: `MQTT_RECIPIENT_JWE_PRIVATE_KEY_PEM="-----BEGIN PRIVATE KEY-----\nMIIE...\n-----END PRIVATE KEY-----"`
+
+## MQTT local (Docker Compose)
+
+Para levantar un broker MQTT (Eclipse Mosquitto) en desarrollo:
 
 ```bash
 docker compose up -d
 ```
 
-Esto inicia **Zookeeper** (puerto 2181) y **Kafka** (puerto 9092) y crea el topic `sqyd.domain.events` si no existe. En tu `.env` usa:
+MQTT queda en **localhost:1883**. En `.env`:
 
-- `KAFKA_BROKERS=localhost:9092`
-- `KAFKA_SSL_ENABLED=false` (sin SASL en local)
+- `MQTT_BROKER_URL=mqtt://localhost:1883`
+- `MQTT_TOPIC=sqyd/domain/events`
 
-Luego arranca el servicio NestJS con `npm run start:dev`. Para bajar los contenedores: `docker compose down`.
+Arranca NestJS con `npm run start:dev`. Para bajar contenedores: `docker compose down`.
 
 ## Base de datos
 
@@ -84,18 +107,16 @@ npm run start:dev
 - **Swagger**: `http://localhost:3000/api/docs`
 - **WebSocket**: `ws://localhost:3000/ws` (token en `auth.token`, `query.token` o header `Authorization: Bearer <token>`)
 
-## Contrato de eventos Kafka (con Spring)
+## Contrato de eventos MQTT (con Spring)
 
-Topic sugerido: **`sqyd.domain.events`**.
-
-Mensaje JSON de ejemplo:
+Topic sugerido: **`sqyd/domain/events`**. Payload del mensaje MQTT (cuerpo del mensaje en JSON):
 
 ```json
 {
   "eventType": "AUDIT_CREATED",
   "channelType": "IN_APP",
   "occurredAt": "2025-02-17T12:00:00Z",
-  "recipients": [789, 101],
+  "recipients": ["<JWE>", "<JWE>"],
   "payload": {
     "auditId": 123,
     "officeNumber": "OF-2025-001",
@@ -107,7 +128,7 @@ Mensaje JSON de ejemplo:
 - `eventType`: tipo (AUDIT_CREATED, AUDIT_UPDATED, AUDIT_STATUS_CHANGED, etc.).
 - `channelType`: `"IN_APP"` o `"EMAIL"`.
 - `occurredAt`: ISO 8601 timestamp del evento.
-- `recipients`: array de IDs numéricos (si `channelType` es `"IN_APP"`) o emails como strings (si es `"EMAIL"`).
+- `recipients`: array de strings **JWE compacto** (siempre cifrados; se desencriptan con la clave configurada).
 - `payload.summary`: texto opcional para título/cuerpo de la notificación.
 
 **Flujo de creación**:
