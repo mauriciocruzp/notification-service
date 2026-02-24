@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import { Notification } from './entities/notification.entity';
 import { NotificationRecipient } from './entities/notification-recipient.entity';
+import type { NotificationRecipientInput } from './dto/notification-recipient.dto';
 
 export interface NotificationWithRecipient {
   notification: {
@@ -18,7 +19,12 @@ export interface NotificationWithRecipient {
   };
   recipient: {
     id: string;
-    recipient: string;
+    recipientId: string | null;
+    firstName: string | null;
+    lastName: string | null;
+    secondLastName: string | null;
+    email: string | null;
+    phone: string | null;
     readAt: Date | null;
     createdAt: Date;
     updatedAt: Date;
@@ -44,7 +50,7 @@ export class NotificationsService {
   ) {}
 
   async findAllForUser(
-    recipient: string,
+    recipientId: string,
     page: number,
     limit: number,
     unreadOnly?: boolean,
@@ -52,7 +58,7 @@ export class NotificationsService {
     const qb = this.recipientRepo
       .createQueryBuilder('nr')
       .innerJoinAndSelect('nr.notification', 'n')
-      .where('nr.recipient = :recipient', { recipient })
+      .where('nr.recipient_id = :recipientId', { recipientId })
       .andWhere('n.channelType = :channelType', { channelType: 'IN_APP' })
       .orderBy('n.occurredAt', 'DESC')
       .addOrderBy('nr.createdAt', 'DESC');
@@ -80,7 +86,12 @@ export class NotificationsService {
       },
       recipient: {
         id: nr.id,
-        recipient: nr.recipient,
+        recipientId: nr.recipientId ?? null,
+        firstName: nr.firstName ?? null,
+        lastName: nr.lastName ?? null,
+        secondLastName: nr.secondLastName ?? null,
+        email: nr.email ?? null,
+        phone: nr.phone ?? null,
         readAt: nr.readAt,
         createdAt: nr.createdAt,
         updatedAt: nr.updatedAt,
@@ -96,9 +107,9 @@ export class NotificationsService {
     };
   }
 
-  async findOne(notificationId: string, recipient: string): Promise<NotificationWithRecipient> {
+  async findOne(notificationId: string, recipientId: string): Promise<NotificationWithRecipient> {
     const recipientEntity = await this.recipientRepo.findOne({
-      where: { notification: { id: notificationId }, recipient },
+      where: { notification: { id: notificationId }, recipientId },
       relations: ['notification'],
     });
 
@@ -124,7 +135,12 @@ export class NotificationsService {
       },
       recipient: {
         id: recipientEntity.id,
-        recipient: recipientEntity.recipient,
+        recipientId: recipientEntity.recipientId ?? null,
+        firstName: recipientEntity.firstName ?? null,
+        lastName: recipientEntity.lastName ?? null,
+        secondLastName: recipientEntity.secondLastName ?? null,
+        email: recipientEntity.email ?? null,
+        phone: recipientEntity.phone ?? null,
         readAt: recipientEntity.readAt,
         createdAt: recipientEntity.createdAt,
         updatedAt: recipientEntity.updatedAt,
@@ -132,9 +148,9 @@ export class NotificationsService {
     };
   }
 
-  async markAsRead(notificationId: string, recipient: string): Promise<NotificationWithRecipient> {
+  async markAsRead(notificationId: string, recipientId: string): Promise<NotificationWithRecipient> {
     const recipientEntity = await this.recipientRepo.findOne({
-      where: { notification: { id: notificationId }, recipient },
+      where: { notification: { id: notificationId }, recipientId },
       relations: ['notification'],
     });
 
@@ -161,7 +177,12 @@ export class NotificationsService {
       },
       recipient: {
         id: recipientEntity.id,
-        recipient: recipientEntity.recipient,
+        recipientId: recipientEntity.recipientId ?? null,
+        firstName: recipientEntity.firstName ?? null,
+        lastName: recipientEntity.lastName ?? null,
+        secondLastName: recipientEntity.secondLastName ?? null,
+        email: recipientEntity.email ?? null,
+        phone: recipientEntity.phone ?? null,
         readAt: recipientEntity.readAt,
         createdAt: recipientEntity.createdAt,
         updatedAt: recipientEntity.updatedAt,
@@ -169,12 +190,12 @@ export class NotificationsService {
     };
   }
 
-  async markAllAsRead(recipient: string): Promise<{ count: number }> {
+  async markAllAsRead(recipientId: string): Promise<{ count: number }> {
     const result = await this.recipientRepo
       .createQueryBuilder()
       .update(NotificationRecipient)
       .set({ readAt: () => 'CURRENT_TIMESTAMP' })
-      .where('recipient = :recipient', { recipient })
+      .where('recipient_id = :recipientId', { recipientId })
       .andWhere('read_at IS NULL')
       .andWhere(
         'notification_id IN (SELECT id FROM notifications WHERE channel_type = :channelType)',
@@ -184,32 +205,35 @@ export class NotificationsService {
     return { count: result.affected ?? 0 };
   }
 
-  async createNotificationWithRecipients(
+  async createNotificationWithRecipient(
     notificationData: {
       type: string;
       channelType: string;
       title: string;
-      body?: string | null;
+      body: string | null;
       payload?: Record<string, unknown> | null;
       occurredAt: Date;
     },
-    recipients: string[],
-  ): Promise<{ notification: Notification; recipients: NotificationRecipient[] }> {
+    recipient: NotificationRecipientInput,
+  ): Promise<{ notification: Notification; recipient: NotificationRecipient }> {
     return await this.dataSource.transaction(async (manager) => {
       const notification = manager.create(Notification, notificationData);
       const savedNotification = await manager.save(Notification, notification);
 
-      const recipientEntities = recipients.map((recipient) =>
-        manager.create(NotificationRecipient, {
-          notification: savedNotification,
-          recipient,
-        }),
-      );
-      const savedRecipients = await manager.save(NotificationRecipient, recipientEntities);
+      const recipientEntity = manager.create(NotificationRecipient, {
+        notification: savedNotification,
+        recipientId: recipient.id,
+        firstName: recipient.firstName,
+        lastName: recipient.lastName,
+        secondLastName: recipient.secondLastName,
+        email: recipient.email,
+        phone: recipient.phone,
+      });
+      const savedRecipient = await manager.save(NotificationRecipient, recipientEntity);
 
       return {
         notification: savedNotification,
-        recipients: savedRecipients,
+        recipient: savedRecipient,
       };
     });
   }

@@ -1,36 +1,11 @@
-/**
- * Contrato de eventos de dominio (Spring → MQTT topic).
- * Topic: sqyd/domain/events (o el configurado en MQTT_TOPIC).
- *
- * Ejemplo de mensaje:
- * {
- *   "eventType": "AUDIT_CREATED",
- *   "channelType": "IN_APP",
- *   "occurredAt": "2025-02-17T12:00:00Z",
- *   "recipients": ["<JWE>", "<JWE>"],
- *   "payload": {
- *     "auditId": 123,
- *     "officeNumber": "OF-2025-001",
- *     "summary": "Nueva auditoría creada"
- *   }
- * }
- *
- * - channelType: "IN_APP" o "EMAIL"
- * - recipients: array de strings JWE compacto (siempre cifrados)
- */
-export interface DomainEventPayload {
-  auditId?: number;
-  officeNumber?: string;
-  summary?: string;
-  [key: string]: unknown;
-}
-
 export interface DomainEvent {
   eventType: string;
-  channelType: 'IN_APP' | 'EMAIL';
+  channelType: string;
   occurredAt: string;
-  recipients: (number | string)[];
-  payload: DomainEventPayload;
+  recipient: string;
+  title: string;
+  body: string;
+  payload: Record<string, unknown>;
 }
 
 export function parseDomainEvent(raw: string): DomainEvent | null {
@@ -39,8 +14,10 @@ export function parseDomainEvent(raw: string): DomainEvent | null {
     if (
       !parsed.eventType ||
       !parsed.channelType ||
-      !parsed.recipients ||
-      !Array.isArray(parsed.recipients) ||
+      !parsed.recipient ||
+      typeof parsed.recipient !== 'string' ||
+      !parsed.title ||
+      !parsed.body ||
       !parsed.payload
     ) {
       return null;

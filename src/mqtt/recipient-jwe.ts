@@ -1,4 +1,5 @@
 import { createPrivateKey, KeyObject } from 'crypto';
+import type { NotificationRecipientInput } from '../notifications/dto/notification-recipient.dto';
 
 export type RecipientJweConfig = {
   keyB64Url?: string;
@@ -18,15 +19,12 @@ async function buildDecryptKey(config: RecipientJweConfig): Promise<Uint8Array |
   );
 }
 
-/**
- * Desencripta un recipient que siempre viene como JWE compacto.
- */
 export async function decryptRecipient(
   recipientJwe: string,
   config: RecipientJweConfig,
-): Promise<string> {
+): Promise<NotificationRecipientInput> {
   const key = await buildDecryptKey(config);
   const { compactDecrypt } = await import('jose');
   const { plaintext } = await compactDecrypt(recipientJwe, key);
-  return new TextDecoder().decode(plaintext);
+  return JSON.parse(new TextDecoder().decode(plaintext)) as NotificationRecipientInput;
 }

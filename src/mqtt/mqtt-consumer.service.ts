@@ -2,12 +2,9 @@ import { Injectable, OnModuleDestroy, OnModuleInit, Logger } from '@nestjs/commo
 import { ConfigService } from '@nestjs/config';
 import mqtt, { MqttClient } from 'mqtt';
 import { NotificationsService } from '../notifications/notifications.service';
-import {
-  parseDomainEvent,
-  buildNotificationTitle,
-  DomainEvent,
-} from './domain.event';
+import { parseDomainEvent, DomainEvent } from './domain.event';
 import { decryptRecipient } from './recipient-jwe';
+
 import { NotificationDeliveryService } from '../websocket/notification-delivery.service';
 
 @Injectable()
@@ -67,6 +64,8 @@ export class MqttConsumerService implements OnModuleInit, OnModuleDestroy {
         const raw = payload?.toString();
         if (!raw) return;
 
+        this.logger.debug(`Raw message: ${raw}`);
+
         const event = parseDomainEvent(raw);
         if (!event) {
           this.logger.warn(`Invalid message on ${topicName}, skipping`);
@@ -102,52 +101,37 @@ export class MqttConsumerService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async handleEvent(event: DomainEvent): Promise<void> {
-    if (!event.recipients?.length) {
-      this.logger.debug(`No recipients for event ${event.eventType}, skipping`);
-      return;
-    }
-
-    const title = buildNotificationTitle(event.eventType, event.payload.summary);
-    const occurredAt = new Date(event.occurredAt);
-
     const jweConfig = {
       keyB64Url: this.config.get<string | undefined>('mqtt.recipientJweKeyB64Url'),
       privateKeyPem: this.config.get<string | undefined>('mqtt.recipientJwePrivateKeyPem'),
     };
 
-    const recipientsRaw = event.recipients.map((r) => String(r));
-    const recipients: string[] = [];
-    for (const jwe of recipientsRaw) {
-      try {
-        const plain = await decryptRecipient(jwe, jweConfig);
-        if (plain.trim().length > 0) recipients.push(plain.trim());
-      } catch (err: any) {
-        this.logger.warn(`Failed to decrypt recipient JWE, skipping. ${err?.message ?? err}`);
-      }
-    }
-    if (!recipients.length) {
-      this.logger.warn(`No valid recipients after decryption for event ${event.eventType}, skipping`);
-      return;
-    }
+    // Desencriptar y parsear el recipient JWE que viene en el evento MQTT
+    const recipient = await decryptRecipient(event.recipient, jweConfig);
+    this.logger.debug(`Handling event ${event.eventType} for recipient ${recipient.id}`);
 
-    const { notification, recipients: savedRecipients } =
-      await this.notificationsService.createNotificationWithRecipients(
+    const occurredAt = new Date(event.occurredAt);
+
+    const { notification, recipient: savedRecipient } =
+      await this.notificationsService.createNotificationWithRecipient(
         {
           type: event.eventType,
           channelType: event.channelType,
-          title,
-          body: event.payload.summary ?? null,
+          title: event.title,
+          body: event.body ?? null,
           payload: event.payload as Record<string, unknown>,
           occurredAt,
         },
-        recipients,
+        recipient,
       );
 
     if (event.channelType === 'IN_APP') {
-      for (const recipientEntity of savedRecipients) {
-        const recipient = recipientEntity.recipient;
-        this.delivery.emitToUser(recipient, 'new_notification', this.toPayload(notification, recipientEntity));
+      const recipientId = savedRecipient.recipientId;
+      if (!recipientId) {
+        this.logger.warn(`NotificationRecipient ${savedRecipient.id} has no recipientId, skipping WebSocket emit`);
+        return;
       }
+      this.delivery.emitToUser(recipientId, 'new_notification', this.toPayload(notification, savedRecipient));
     }
   }
 
@@ -166,7 +150,7 @@ export class MqttConsumerService implements OnModuleInit, OnModuleDestroy {
       },
       recipient: {
         id: recipient.id,
-        recipient: recipient.recipient,
+        recipient: recipient.recipientId,
         readAt: recipient.readAt,
         createdAt: recipient.createdAt,
         updatedAt: recipient.updatedAt,

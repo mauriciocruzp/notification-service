@@ -6,16 +6,12 @@ import {
   ManyToOne,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
-  Unique,
   JoinColumn,
 } from 'typeorm';
 import { Notification } from './notification.entity';
 
 @Entity('notification_recipients')
-@Unique(['notification', 'recipient'])
 @Index(['notification'])
-@Index(['recipient', 'createdAt'])
-@Index(['recipient', 'readAt'])
 export class NotificationRecipient {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -26,8 +22,27 @@ export class NotificationRecipient {
   @JoinColumn({ name: 'notification_id' })
   notification: Notification;
 
-  @Column({ type: 'varchar', length: 255 })
-  recipient: string;
+  /**
+   * Identificador lógico del destinatario (id del sistema actual recibido por MQTT).
+   * Se usa para filtrar por usuario autenticado y para el delivery por WebSocket.
+   */
+  @Column({ name: 'recipient_id', type: 'varchar', length: 255, nullable: true })
+  recipientId: string | null;
+
+  @Column({ name: 'first_name', type: 'varchar', length: 255, nullable: true })
+  firstName: string | null;
+
+  @Column({ name: 'last_name', type: 'varchar', length: 255, nullable: true })
+  lastName: string | null;
+
+  @Column({ name: 'second_last_name', type: 'varchar', length: 255, nullable: true })
+  secondLastName: string | null;
+
+  @Column({ name: 'email', type: 'varchar', length: 255, nullable: true })
+  email: string | null;
+
+  @Column({ name: 'phone', type: 'varchar', length: 64, nullable: true })
+  phone: string | null;
 
   @Column({ name: 'read_at', type: 'timestamp', nullable: true })
   readAt: Date | null;
