@@ -19,7 +19,6 @@ export default () => ({
   },
   jwt: {
     secret: process.env.JWT_SECRET ?? 'change-me-in-production',
-    jwksUri: process.env.JWKS_URI,
   },
   frontend: {
     origin: process.env.FRONTEND_ORIGIN ?? 'http://localhost:3000',
